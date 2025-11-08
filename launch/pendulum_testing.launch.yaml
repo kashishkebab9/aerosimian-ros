@@ -1,0 +1,37 @@
+%YAML 1.2
+---
+launch:
+  - node_container:
+      pkg: rclcpp_components
+      exec: component_container
+      name: aerosimian_container
+      namespace: ''
+  - load_composable_node:
+      target: "aerosimian_container"
+      composable_node:
+        - pkg: mocap_vicon
+          plugin: mocap::ViconDriverComponent
+          name: mocap_vicon
+            # remap:
+            #   - from: /image
+            #     to: /burgerimage
+          param:
+            - name: server_address
+              value: '192.168.8.2'
+            - name: frame_rate
+              value: 100
+            - name: max_accel
+              value: 10.0
+            - name: publish_tf
+              value: true
+            - name: publish_pts
+              value: true
+        - pkg: aerosimian
+          plugin: aerosimian::AeroSimianStateEstimatorComponent
+          name: state_estimator
+          remap:
+            - from: /aerosimian_pendulum/individual_marker_array
+              to: /pendulum_markers
+
+
+
