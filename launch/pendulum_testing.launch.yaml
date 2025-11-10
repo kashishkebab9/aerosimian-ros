@@ -32,6 +32,8 @@ launch:
           remap:
             - from: /pendulum_markers
               to: /aerosimian_pendulum/individual_marker_array
+            - from: /quad_markers
+              to: /aerosimian_quad/individual_marker_array
 
 
 

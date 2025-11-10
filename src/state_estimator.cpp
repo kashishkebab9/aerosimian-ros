@@ -15,7 +15,7 @@ public:
   explicit AeroSimianStateEstimatorComponent(const rclcpp::NodeOptions & options)
   : Node("aerosimian_state_estimator_component", options)
   {
-    subscription_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
+    pendulum_markers_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
       "pendulum_markers",
       10,
       std::bind(&AeroSimianStateEstimatorComponent::pendulum_markers_cb, 
@@ -30,6 +30,7 @@ public:
   }
 
 private:
+
   void pendulum_markers_cb(const geometry_msgs::msg::PoseArray::SharedPtr msg)
   {
     if (!initialized_) {
@@ -202,7 +203,7 @@ private:
     } 
   }
 
-  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr subscription_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pendulum_markers_sub_;
   bool debug_ = false;
   bool initialized_ = false;
   u_int8_t msg_count_ = 0;
