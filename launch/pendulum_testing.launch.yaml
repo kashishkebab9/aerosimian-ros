@@ -30,8 +30,8 @@ launch:
           plugin: aerosimian::AeroSimianStateEstimatorComponent
           name: state_estimator
           remap:
-            - from: /aerosimian_pendulum/individual_marker_array
-              to: /pendulum_markers
+            - from: /pendulum_markers
+              to: /aerosimian_pendulum/individual_marker_array
 
 
 
