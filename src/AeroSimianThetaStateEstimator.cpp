@@ -24,6 +24,8 @@ public:
       std::bind(&AeroSimianThetaStateEstimatorComponent::pendulum_markers_cb, 
                                                     this, 
                                                     std::placeholders::_1));
+    state_pub_ = this->create_publisher<aerosimian::msg::AeroSimianState>(
+      "/aerosimian/theta_state", 10);
 
 
     RCLCPP_INFO(this->get_logger(), "AeroSimianThetaStateEstimatorComponent constructed");
@@ -204,10 +206,20 @@ private:
       RCLCPP_INFO_STREAM(this->get_logger(), "%%%%%%%%%%%%%");
 
     } 
+    aerosimian::msg::AeroSimianState state_msg;
+    state_msg.header.stamp = this->now();
+    state_msg.header.frame_id = "world";  // or mocap frame
+    state_msg.theta     = signed_angle_rad;
+    // state_msg.theta_dot = theta_dot; <--- TODO
+    state_msg.phi       = 0.0f;
+    state_msg.phi_dot   = 0.0f;
+
+    state_pub_->publish(state_msg);
   }
 
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pendulum_markers_sub_;
-  bool debug_ = false;
+  rclcpp::Publisher<aerosimian::msg::AeroSimianState>::SharedPtr state_pub_;
+  bool debug_ = true;
   bool initialized_ = false;
   u_int8_t msg_count_ = 0;
   u_int8_t msg_threshold_ = 5; //  wait till this many msgs before starting init

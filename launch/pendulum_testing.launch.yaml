@@ -27,8 +27,8 @@ launch:
             - name: publish_pts
               value: true
         - pkg: aerosimian
-          plugin: aerosimian::AeroSimianStateThetaEstimatorComponent
-          name: state_estimator
+          plugin: aerosimian::AeroSimianThetaStateEstimatorComponent
+          name: theta_estimator_node
           remap:
             - from: /pendulum_markers
               to: /aerosimian_pendulum/individual_marker_array

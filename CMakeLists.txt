@@ -8,12 +8,14 @@ find_package(rclcpp_components REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
 
 set(msg_files
   "msg/AeroSimianState.msg"
 )
 rosidl_generate_interfaces(${PROJECT_NAME}
   ${msg_files}
+  DEPENDENCIES std_msgs
 )
 
 # --- FetchContent (optional) ---
@@ -60,7 +62,7 @@ endif()
 
 # Register as a component
 rclcpp_components_register_nodes(theta_estimator_node
-  "aerosimian::AeroSimianStateThetaEstimatorComponent"
+  "aerosimian::AeroSimianThetaStateEstimatorComponent"
 )
 
 install(TARGETS theta_estimator_node
