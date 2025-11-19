@@ -75,18 +75,37 @@ install(TARGETS theta_estimator_node
 add_executable(driver src/driver.cpp)
 target_compile_features(driver PUBLIC cxx_std_17)
 
+add_executable(aerosimian_full_state_node
+  src/AeroSimianFullStateEstimator.cpp
+)
+target_compile_features(aerosimian_full_state_node PUBLIC cxx_std_17)
+
+ament_target_dependencies(aerosimian_full_state_node
+  rclcpp
+  std_msgs
+)
+rosidl_target_interfaces(aerosimian_full_state_node
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+
 # link moteus for driver (plain form)
 if (TARGET moteus::cpp)
   target_link_libraries(driver moteus::cpp)
+  target_link_libraries(aerosimian_full_state_node moteus::cpp)
 elseif (TARGET moteus)
   target_link_libraries(driver moteus)
+  target_link_libraries(aerosimian_full_state_node moteus)
 elseif (TARGET mjbots::moteus)
   target_link_libraries(driver mjbots::moteus)
+  target_link_libraries(aerosimian_full_state_node mjbots::moteus)
 endif()
 
 ament_target_dependencies(driver rclcpp)
 
 install(TARGETS driver
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS aerosimian_full_state_node
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
