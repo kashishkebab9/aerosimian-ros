@@ -27,7 +27,7 @@ launch:
             - name: publish_pts
               value: true
         - pkg: aerosimian
-          plugin: aerosimian::AeroSimianStateEstimatorComponent
+          plugin: aerosimian::AeroSimianStateThetaEstimatorComponent
           name: state_estimator
           remap:
             - from: /pendulum_markers

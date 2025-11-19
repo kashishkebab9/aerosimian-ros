@@ -1,29 +1,32 @@
 #include <memory>
 #include <string>
 #include <eigen3/Eigen/Dense>
+#include <limits> 
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
-#include <limits> // for numeric_limits
+
+#include "aerosimian/msg/aero_simian_state.hpp"  // <-- change to your package/msg name
+
 
 namespace aerosimian
 {
 
-class AeroSimianStateEstimatorComponent : public rclcpp::Node
+class AeroSimianThetaStateEstimatorComponent : public rclcpp::Node
 {
 public:
-  explicit AeroSimianStateEstimatorComponent(const rclcpp::NodeOptions & options)
+  explicit AeroSimianThetaStateEstimatorComponent(const rclcpp::NodeOptions & options)
   : Node("aerosimian_state_estimator_component", options)
   {
     pendulum_markers_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
       "pendulum_markers",
       10,
-      std::bind(&AeroSimianStateEstimatorComponent::pendulum_markers_cb, 
+      std::bind(&AeroSimianThetaStateEstimatorComponent::pendulum_markers_cb, 
                                                     this, 
                                                     std::placeholders::_1));
 
 
-    RCLCPP_INFO(this->get_logger(), "AeroSimianStateEstimatorComponent constructed");
+    RCLCPP_INFO(this->get_logger(), "AeroSimianThetaStateEstimatorComponent constructed");
     RCLCPP_INFO(this->get_logger(), "Ensure AeroSimian is hanging at around 0 \
         degrees theta for proper initialization");
 
@@ -218,5 +221,5 @@ private:
 
 // Register component
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(aerosimian::AeroSimianStateEstimatorComponent)
+RCLCPP_COMPONENTS_REGISTER_NODE(aerosimian::AeroSimianThetaStateEstimatorComponent)
 

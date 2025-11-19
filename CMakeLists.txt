@@ -7,6 +7,14 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+set(msg_files
+  "msg/AeroSimianState.msg"
+)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files}
+)
 
 # --- FetchContent (optional) ---
 include(FetchContent)
@@ -19,40 +27,43 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(moteus)
 
 # --- Build the component as a shared library ---
-add_library(state_estimator_node SHARED
-  src/state_estimator.cpp
+add_library(theta_estimator_node SHARED
+  src/AeroSimianThetaStateEstimator.cpp
 )
 
 # Ensure modern C++ standard
-target_compile_features(state_estimator_node PUBLIC cxx_std_17)
+target_compile_features(theta_estimator_node PUBLIC cxx_std_17)
 
 # Link Eigen (plain form to match ament_target_dependencies)
-target_link_libraries(state_estimator_node Eigen3::Eigen)
+target_link_libraries(theta_estimator_node Eigen3::Eigen)
 
 # ament dependencies (this will call target_link_libraries in plain form)
-ament_target_dependencies(state_estimator_node
+ament_target_dependencies(theta_estimator_node
   rclcpp
   rclcpp_components
   geometry_msgs
 )
 
+rosidl_target_interfaces(theta_estimator_node
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 # Try to link moteus if an exported target exists (plain link form)
 if (TARGET moteus::cpp)
-  target_link_libraries(state_estimator_node moteus::cpp)
+  target_link_libraries(theta_estimator_node moteus::cpp)
 elseif (TARGET moteus)
-  target_link_libraries(state_estimator_node moteus)
+  target_link_libraries(theta_estimator_node moteus)
 elseif (TARGET mjbots::moteus)
-  target_link_libraries(state_estimator_node mjbots::moteus)
+  target_link_libraries(theta_estimator_node mjbots::moteus)
 else()
   message(WARNING "Could not find an obvious moteus CMake target. Inspect the moteus repo CMake to pick the correct target name or vendor it into src/.")
 endif()
 
 # Register as a component
-rclcpp_components_register_nodes(state_estimator_node
-  "aerosimian::AeroSimianStateEstimatorComponent"
+rclcpp_components_register_nodes(theta_estimator_node
+  "aerosimian::AeroSimianStateThetaEstimatorComponent"
 )
 
-install(TARGETS state_estimator_node
+install(TARGETS theta_estimator_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -81,5 +92,6 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
 )
 
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()
 
