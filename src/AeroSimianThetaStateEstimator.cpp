@@ -182,12 +182,12 @@ private:
     float signed_angle_rad = atan2(term_1, term_2);
     float signed_angle_deg = signed_angle_rad * 180.0f / M_PI;
 
-    RCLCPP_INFO_STREAM(this->get_logger(), "ref_axis_normal: " << ref_axis_normal);
-    RCLCPP_INFO_STREAM(this->get_logger(), "signed_angle_rad: " << signed_angle_rad);
-    RCLCPP_INFO_STREAM(this->get_logger(), "signed_angle_deg: " << signed_angle_deg);
 
     // Helpful debug prints
     if (debug_) {
+      RCLCPP_INFO_STREAM(this->get_logger(), "ref_axis_normal: " << ref_axis_normal);
+      RCLCPP_INFO_STREAM(this->get_logger(), "signed_angle_rad: " << signed_angle_rad);
+      RCLCPP_INFO_STREAM(this->get_logger(), "signed_angle_deg: " << signed_angle_deg);
       RCLCPP_INFO_STREAM(this->get_logger(), "p1_x: " << p1_pose.x);
       RCLCPP_INFO_STREAM(this->get_logger(), "p1_y: " << p1_pose.y);
       RCLCPP_INFO_STREAM(this->get_logger(), "p1_z: " << p1_pose.z);
@@ -206,27 +206,78 @@ private:
       RCLCPP_INFO_STREAM(this->get_logger(), "%%%%%%%%%%%%%");
 
     } 
+        // === Theta and theta_dot computation ===
+    float theta = signed_angle_rad;
+
+    // Use mocap time if available, otherwise fallback to node time
+    rclcpp::Time stamp;
+    if (msg->header.stamp.sec != 0 || msg->header.stamp.nanosec != 0) {
+      stamp = msg->header.stamp;
+    } else {
+      stamp = this->now();
+    }
+
+    float theta_dot = 0.0f;
+
+    if (have_prev_theta_) {
+      double dt = (stamp - prev_stamp_).seconds();
+      if (dt > 1e-4) {
+        // Wrap angle difference into [-pi, pi] to avoid jumps over 2*pi
+        float dtheta = std::atan2(
+          std::sin(theta - prev_theta_),
+          std::cos(theta - prev_theta_)
+        );
+        theta_dot = static_cast<float>(dtheta / dt);
+      } else {
+        // too small dt, keep theta_dot as previous or zero
+        theta_dot = 0.0f;
+      }
+    } else {
+      have_prev_theta_ = true;
+    }
+
+    prev_theta_ = theta;
+    prev_stamp_ = stamp;
+
+    // === Fill and publish state message ===
     aerosimian::msg::AeroSimianState state_msg;
-    state_msg.header.stamp = this->now();
-    state_msg.header.frame_id = "world";  // or mocap frame
-    state_msg.theta     = signed_angle_rad;
-    // state_msg.theta_dot = theta_dot; <--- TODO
-    state_msg.phi       = 0.0f;
-    state_msg.phi_dot   = 0.0f;
+    state_msg.header.stamp = stamp;
+    state_msg.header.frame_id = "world";  // or your mocap frame
+
+    state_msg.theta     = theta;      // radians
+    state_msg.theta_dot = theta_dot;  // rad/s
+    state_msg.phi       = 0.0f;       // TODO
+    state_msg.phi_dot   = 0.0f;       // TODO
 
     state_pub_->publish(state_msg);
+
+    // aerosimian::msg::AeroSimianState state_msg;
+    // state_msg.header.stamp = this->now();
+    // state_msg.header.frame_id = "world";  // or mocap frame
+    // state_msg.theta     = signed_angle_rad;
+    // // state_msg.theta_dot = theta_dot; <--- TODO
+    // state_msg.phi       = 0.0f;
+    // state_msg.phi_dot   = 0.0f;
+
+    // state_pub_->publish(state_msg);
   }
 
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pendulum_markers_sub_;
   rclcpp::Publisher<aerosimian::msg::AeroSimianState>::SharedPtr state_pub_;
-  bool debug_ = true;
+  bool debug_ = false;
   bool initialized_ = false;
   u_int8_t msg_count_ = 0;
   u_int8_t msg_threshold_ = 5; //  wait till this many msgs before starting init
   std::pair<u_int32_t, u_int32_t> theta_axes_indices_; // a pair of indices from the 
                                                     // pose array which defines
                                                     // the axis of our theta rotation
+
   u_int32_t lowest_z_ind_;
+  // For theta_dot estimation
+  bool have_prev_theta_ = false;
+  float prev_theta_ = 0.0f;
+  rclcpp::Time prev_stamp_;
+
 };
 
 }  // namespace aerosimian
