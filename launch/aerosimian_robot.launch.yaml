@@ -1,0 +1,22 @@
+%YAML 1.2
+---
+launch:
+  - node_container:
+      pkg: rclcpp_components
+      exec: component_container
+      name: aerosimian_container
+      namespace: ''
+
+  - load_composable_node:
+      target: "aerosimian_container"
+      composable_node:
+        - pkg: aerosimian
+          plugin: AeroSimianPhiStateNode
+          name: aerosimian_phi_state_node
+          remap:
+            - from: /aerosimian/theta_state
+              to: /aerosimian/theta_state
+          param:
+            - name: moteus_id
+              value: 1   # override in other launch files if needed
+
