@@ -36,6 +36,8 @@ public:
       std::bind(&AeroSimianPhiStateNode::timerCallback, this));
 
     RCLCPP_INFO(this->get_logger(), "AeroSimianPhiStateNode started");
+
+
   }
 
 private:
@@ -94,6 +96,13 @@ private:
 
     state_pub_->publish(out_msg);
 
+    // Store last full state safely
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      last_state_ = out_msg;
+    }
+
+
     RCLCPP_INFO_THROTTLE(
       this->get_logger(), *this->get_clock(), 1000,
       "moteus: mode=%d, phi=%.4f rad, phi_dot=%.4f rad/s, torque=%.4f Nm",
@@ -102,6 +111,30 @@ private:
       phi_dot,
       static_cast<double>(r.torque));
   }
+
+  void driveMoteus(float position) {
+    mjbots::moteus::PositionMode::Command cmd;
+    cmd.position = position;     
+    cmd.velocity = 1.0;            // commanded velocity [rev/s]
+
+    const auto maybe_result = controller_.SetPosition(cmd);
+
+    if (!maybe_result) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000,
+        "Failed to send drivePhiToPosition command to moteus");
+      return;
+    }
+
+    const auto & r = maybe_result->values;
+    RCLCPP_DEBUG(
+      this->get_logger(),
+      "drivePhiToPosition → target=%.4f  | current=%.4f rev | vel=%.4f",
+      position,
+      r.position,
+      r.velocity);
+ }
+
 
   // ROS bits
   rclcpp::Subscription<aerosimian::msg::AeroSimianState>::SharedPtr theta_sub_;
@@ -115,6 +148,8 @@ private:
 
   // moteus controller (note full namespace)
   mjbots::moteus::Controller controller_;
+   aerosimian::msg::AeroSimianState last_state_;
+  std::mutex state_mutex_;  
 };
 
 int main(int argc, char ** argv) {

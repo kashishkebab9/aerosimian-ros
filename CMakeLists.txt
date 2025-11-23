@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.16)
 project(aerosimian)
 
@@ -76,62 +77,39 @@ install(TARGETS theta_estimator_node
 add_executable(driver src/driver.cpp)
 target_compile_features(driver PUBLIC cxx_std_17)
 
+add_executable(aerosimian_full_state_node
+  src/AeroSimianFullStateEstimator.cpp
+)
+target_compile_features(aerosimian_full_state_node PUBLIC cxx_std_17)
+
+ament_target_dependencies(aerosimian_full_state_node
+  rclcpp
+  std_msgs
+)
+rosidl_target_interfaces(aerosimian_full_state_node
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+
+# link moteus for driver (plain form)
+if (TARGET moteus::cpp)
+  target_link_libraries(driver moteus::cpp)
+  target_link_libraries(aerosimian_full_state_node moteus::cpp)
+elseif (TARGET moteus)
+  target_link_libraries(driver moteus)
+  target_link_libraries(aerosimian_full_state_node moteus)
+elseif (TARGET mjbots::moteus)
+  target_link_libraries(driver mjbots::moteus)
+  target_link_libraries(aerosimian_full_state_node mjbots::moteus)
+endif()
+
+ament_target_dependencies(driver rclcpp)
 
 install(TARGETS driver
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
-
-# --- Full-state estimator component as shared library ---
-add_library(aerosimian_full_state_component SHARED
-  src/AeroSimianFullStateEstimatorComponent.cpp
+install(TARGETS aerosimian_full_state_node
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
-
-target_compile_features(aerosimian_full_state_component PUBLIC cxx_std_17)
-
-ament_target_dependencies(aerosimian_full_state_component
-  rclcpp
-  rclcpp_components
-  std_msgs
-  geometry_msgs
-)
-
-rosidl_target_interfaces(aerosimian_full_state_component
-  ${PROJECT_NAME} "rosidl_typesupport_cpp"
-)
-
-# Link moteus for full-state component (plain form)
-if (TARGET moteus::cpp)
-  target_link_libraries(aerosimian_full_state_component moteus::cpp)
-elseif (TARGET moteus)
-  target_link_libraries(aerosimian_full_state_component moteus)
-elseif (TARGET mjbots::moteus)
-  target_link_libraries(aerosimian_full_state_component mjbots::moteus)
-else()
-  message(WARNING "Could not find an obvious moteus CMake target for aerosimian_full_state_component.")
-endif()
-
-# Register as a component and also create an executable
-# NOTE: PLUGIN must match the C++ class name you used.
-rclcpp_components_register_node(aerosimian_full_state_component
-  PLUGIN "AeroSimianPhiStateNode"
-  EXECUTABLE aerosimian_full_state_node
-)
-
-install(TARGETS aerosimian_full_state_component
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-)
-
-# Keep driver linking to moteus as before
-if (TARGET moteus::cpp)
-  target_link_libraries(driver moteus::cpp)
-elseif (TARGET moteus)
-  target_link_libraries(driver moteus)
-elseif (TARGET mjbots::moteus)
-  target_link_libraries(driver mjbots::moteus)
-endif()
-
 
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
@@ -139,5 +117,4 @@ install(DIRECTORY launch
 
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
-
 
