@@ -112,9 +112,13 @@ private:
       static_cast<double>(r.torque));
   }
 
-  void driveMoteus(float position) {
+  void driveMoteus(float phi) {
+    // phi in radians
+    constexpr double TWO_PI = 2.0 * M_PI;
+    float moteus_center_rads = moteus_center_revs_  * TWO_PI;
     mjbots::moteus::PositionMode::Command cmd;
-    cmd.position = position;     
+    cmd.position = phi - moteus_center_rads ;     
+    cmd.position = cmd.position/TWO_PI;
     cmd.velocity = 1.0;            // commanded velocity [rev/s]
 
     const auto maybe_result = controller_.SetPosition(cmd);
@@ -130,7 +134,7 @@ private:
     RCLCPP_DEBUG(
       this->get_logger(),
       "drivePhiToPosition → target=%.4f  | current=%.4f rev | vel=%.4f",
-      position,
+      phi,
       r.position,
       r.velocity);
  }
@@ -148,8 +152,9 @@ private:
 
   // moteus controller (note full namespace)
   mjbots::moteus::Controller controller_;
-   aerosimian::msg::AeroSimianState last_state_;
+  aerosimian::msg::AeroSimianState last_state_;
   std::mutex state_mutex_;  
+  float moteus_center_revs_ = .38;
 };
 
 int main(int argc, char ** argv) {
