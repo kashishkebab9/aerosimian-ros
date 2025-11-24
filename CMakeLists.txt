@@ -1,4 +1,3 @@
-
 cmake_minimum_required(VERSION 3.16)
 project(aerosimian)
 
@@ -102,7 +101,12 @@ elseif (TARGET mjbots::moteus)
   target_link_libraries(aerosimian_full_state_node mjbots::moteus)
 endif()
 
+include_directories(include)
+
 ament_target_dependencies(driver rclcpp)
+install(DIRECTORY include/
+  DESTINATION include
+)
 
 install(TARGETS driver
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -115,6 +119,8 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/
 )
 
+ament_export_include_directories(include)
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
+
 
