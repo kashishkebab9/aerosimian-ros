@@ -19,9 +19,12 @@ public:
     controller_(make_controller_options())
   {
     vertiq_port_ = this->declare_parameter("vertiq_port", "/dev/ttyUSB0");
+      RCLCPP_INFO(get_logger(), "1");
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
+      RCLCPP_INFO(get_logger(), "2");
     // Clear any existing faults.
     controller_.SetStop();
+      RCLCPP_INFO(get_logger(), "3");
 
     // Subscribe to theta/theta_dot
     theta_sub_ = this->create_subscription<aerosimian::msg::AeroSimianState>(
@@ -29,18 +32,25 @@ public:
       10,
       std::bind(&AeroSimianPhiStateNode::thetaCallback, this, std::placeholders::_1));
 
+      RCLCPP_INFO(get_logger(), "4");
     // Publish full state
     state_pub_ = this->create_publisher<aerosimian::msg::AeroSimianState>(
       "/aerosimian/state", 10);
 
+      RCLCPP_INFO(get_logger(), "5");
     // Timer to poll moteus and publish combined state
     timer_ = this->create_wall_timer(
       20ms,  // 50 Hz
       std::bind(&AeroSimianPhiStateNode::timerCallback, this));
 
+      RCLCPP_INFO(get_logger(), "6");
+    vertiq_ = std::make_unique<VertiqHeartbeat>(vertiq_port_, vertiq_baud_);
+
     if (vertiq_->start()) {
+      RCLCPP_INFO(get_logger(), "7");
       RCLCPP_INFO(get_logger(), "Vertiq heartbeat started");
     } else {
+      RCLCPP_INFO(get_logger(), "8");
       RCLCPP_WARN(get_logger(), "Failed to open Vertiq at %s", vertiq_port_.c_str());
     }
 
