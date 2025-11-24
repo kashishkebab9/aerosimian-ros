@@ -35,9 +35,20 @@ public:
       20ms,  // 50 Hz
       std::bind(&AeroSimianPhiStateNode::timerCallback, this));
 
+    // === Hardware test: single drive to phi = 0 ===
+    drive_test_timer_ = this->create_wall_timer(
+      2s,
+      [this]() {
+        if (test_drive_done_) {
+          return;
+        }
+        RCLCPP_INFO(this->get_logger(),
+                    "Hardware test: calling driveMoteus(0.0 rad)");
+        driveMoteus(0.0f);
+        test_drive_done_ = true;
+      });
+
     RCLCPP_INFO(this->get_logger(), "AeroSimianPhiStateNode started");
-
-
   }
 
 private:
@@ -155,6 +166,8 @@ private:
   aerosimian::msg::AeroSimianState last_state_;
   std::mutex state_mutex_;  
   float moteus_center_revs_ = .38;
+  rclcpp::TimerBase::SharedPtr drive_test_timer_;
+  bool test_drive_done_ = false;
 };
 
 int main(int argc, char ** argv) {
