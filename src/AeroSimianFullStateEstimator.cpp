@@ -8,6 +8,7 @@
 #include "aerosimian/msg/aero_simian_state.hpp"
 
 #include "moteus.h"  // <-- IMPORTANT
+#include "aerosimian/vertiq.hpp"
 
 using namespace std::chrono_literals;
 
@@ -17,6 +18,8 @@ public:
   : rclcpp::Node("aerosimian_full_state_node"),
     controller_(make_controller_options())
   {
+    vertiq_port_ = this->declare_parameter("vertiq_port", "/dev/ttyUSB0");
+    vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
     // Clear any existing faults.
     controller_.SetStop();
 
@@ -35,20 +38,30 @@ public:
       20ms,  // 50 Hz
       std::bind(&AeroSimianPhiStateNode::timerCallback, this));
 
+    if (vertiq_->start()) {
+      RCLCPP_INFO(get_logger(), "Vertiq heartbeat started");
+    } else {
+      RCLCPP_WARN(get_logger(), "Failed to open Vertiq at %s", vertiq_port_.c_str());
+    }
+
     // === Hardware test: single drive to phi = 0 ===
-    drive_test_timer_ = this->create_wall_timer(
-      2s,
-      [this]() {
-        if (test_drive_done_) {
-          return;
-        }
-        RCLCPP_INFO(this->get_logger(),
-                    "Hardware test: calling driveMoteus(0.0 rad)");
-        driveMoteus(0.0f);
-        test_drive_done_ = true;
-      });
+    // drive_test_timer_ = this->create_wall_timer(
+    //   2s,
+    //   [this]() {
+    //     if (test_drive_done_) {
+    //       return;
+    //     }
+    //     RCLCPP_INFO(this->get_logger(),
+    //                 "Hardware test: calling driveMoteus(0.0 rad)");
+    //     driveMoteus(0.0f);
+    //     test_drive_done_ = true;
+    //   });
 
     RCLCPP_INFO(this->get_logger(), "AeroSimianPhiStateNode started");
+  }
+
+  ~AeroSimianPhiStateNode() override {
+    if (vertiq_) vertiq_->stop();
   }
 
 private:
@@ -155,6 +168,9 @@ private:
   rclcpp::Subscription<aerosimian::msg::AeroSimianState>::SharedPtr theta_sub_;
   rclcpp::Publisher<aerosimian::msg::AeroSimianState>::SharedPtr state_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  std::string vertiq_port_;
+  int vertiq_baud_;
+  std::unique_ptr<VertiqHeartbeat> vertiq_;
 
   // theta storage
   std::mutex theta_mutex_;
