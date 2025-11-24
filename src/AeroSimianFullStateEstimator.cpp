@@ -56,6 +56,17 @@ public:
     //     driveMoteus(0.0f);
     //     test_drive_done_ = true;
     //   });
+    vertiq_test_timer_ = this->create_wall_timer(
+       2s,  // run once, 2 seconds after startup
+      [this]() {
+        if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+          RCLCPP_INFO(this->get_logger(),
+                      "Hardware test: sending SET 50,50,50,50");
+          vertiq_->sendSet(50, 50, 50, 50);
+          vertiq_test_done_ = true;
+        }
+      });
+
 
     RCLCPP_INFO(this->get_logger(), "AeroSimianPhiStateNode started");
   }
@@ -182,8 +193,12 @@ private:
   aerosimian::msg::AeroSimianState last_state_;
   std::mutex state_mutex_;
   float moteus_center_revs_ = .38;
+
+  // TEST
   rclcpp::TimerBase::SharedPtr drive_test_timer_;
   bool test_drive_done_ = false;
+  rclcpp::TimerBase::SharedPtr vertiq_test_timer_;
+  bool vertiq_test_done_ = false;
 };
 
 int main(int argc, char ** argv) {
