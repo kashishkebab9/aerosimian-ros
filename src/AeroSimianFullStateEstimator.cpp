@@ -128,7 +128,7 @@ private:
     constexpr double TWO_PI = 2.0 * M_PI;
     float moteus_center_rads = moteus_center_revs_  * TWO_PI;
     mjbots::moteus::PositionMode::Command cmd;
-    cmd.position = phi - moteus_center_rads ;     
+    cmd.position = phi + moteus_center_rads ;
     cmd.position = cmd.position/TWO_PI;
     cmd.velocity = 1.0;            // commanded velocity [rev/s]
 
@@ -164,7 +164,7 @@ private:
   // moteus controller (note full namespace)
   mjbots::moteus::Controller controller_;
   aerosimian::msg::AeroSimianState last_state_;
-  std::mutex state_mutex_;  
+  std::mutex state_mutex_;
   float moteus_center_revs_ = .38;
   rclcpp::TimerBase::SharedPtr drive_test_timer_;
   bool test_drive_done_ = false;
