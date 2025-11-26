@@ -19,6 +19,8 @@ launch:
           param:
             - name: moteus_id
               value: 1   # override in other launch files if needed
+            - name: transport_args
+              value: "--fdcanusb /dev/ttyACM0"
             - name: k_p_bottom_half
               value: 1.25  # example
             - name: k_d_bottom_half
