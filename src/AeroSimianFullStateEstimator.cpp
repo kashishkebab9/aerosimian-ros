@@ -264,6 +264,16 @@ private:
     if (u < U_MIN) u = U_MIN;
 
     RCLCPP_INFO_STREAM(get_logger(), "u_output after clamping " << u);
+
+    if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+      RCLCPP_INFO(this->get_logger(),
+                  "Hardware test: sending SET 50,50,50,50");
+      vertiq_->sendSet(u, u, u, u);
+      this->phi_des_ = -1 * theta_des_;
+      driveMoteus(phi_des_);
+
+    }
+
     return;
 
   }
