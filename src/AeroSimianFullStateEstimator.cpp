@@ -237,16 +237,17 @@ private:
     u += this->k_i_bottom_half_ * theta_error_int_;
     u += this->k_d_bottom_half_ * e_theta_dot;
 
+    RCLCPP_INFO_STREAM(get_logger(), "u_output before offset " << u);
+    float u_offset = 56 * sin(theta);
+    u += u_offset;
+    RCLCPP_INFO_STREAM(get_logger(), "u_output after offset " << u);
     // === 6. Clamp u to be within [-62, 62] ===
     const float U_MIN = 0.0f;
     const float U_MAX = 62.0f;
     if (u > U_MAX)  u = U_MAX;
     if (u < U_MIN) u = U_MIN;
-    RCLCPP_INFO_STREAM(get_logger(), "u_output before offset " << u);
-    float u_offset = 56 * sin(theta);
-    u += u_offset;
-    RCLCPP_INFO_STREAM(get_logger(), "u_output after offset " << u);
 
+    RCLCPP_INFO_STREAM(get_logger(), "u_output after clamping " << u);
     return;
 
   }
