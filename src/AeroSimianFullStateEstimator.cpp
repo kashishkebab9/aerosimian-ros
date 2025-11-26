@@ -75,11 +75,11 @@ public:
     //       vertiq_test_done_ = true;
     //     }
     //   });
-    
+
     // Closed Loop Bottom Hemisphere Control
     // 1. Create a timer that runs at 100hz
     // 2. Write a service client that writes to member variables that initialize as nan
-    
+
     control_timer_ = this->create_wall_timer(
         10ms,   // 100 Hz period
         std::bind(&AeroSimianPhiStateNode::control_loop_bottom_half, this)
@@ -195,10 +195,13 @@ private:
   }
 
   void control_loop_bottom_half() {
+    RCLCPP_INFO_STREAM(get_logger(), "here 1");
     // Don’t do anything until someone sets desired angles
-    if (std::isnan(this->theta_des_) || std::isnan(this->phi_des_)) {
+    if (std::isnan(this->theta_des_) &&  std::isnan(this->phi_des_)) {
+        RCLCPP_INFO_STREAM(get_logger(), "here 2");
       return;
     }
+        RCLCPP_INFO_STREAM(get_logger(), "here 3");
 
     // === 1. Get current theta (optionally under a mutex) ===
     // If you want to be strict about thread-safety:
@@ -210,7 +213,17 @@ private:
     float theta = state_copy.theta;
 
     // === 2. Error term ===
-    float e_theta = this->theta_des_ - theta;
+    float e_theta;
+    if (this->theta_des_ < 0) {
+            if (theta < 0) {
+                    e_theta = -1 *(theta_des_ - theta);
+            } else {
+                    e_theta = std::abs(theta_des_ - theta);
+            }
+    } else {
+            e_theta = theta_des_ - theta;
+            }
+    RCLCPP_INFO_STREAM(get_logger(), "e_theta: " << e_theta);
 
     // Assume control_timer_ is 100 Hz → dt = 0.01 s
     constexpr float dt = 0.01f;
@@ -238,7 +251,10 @@ private:
     u += this->k_d_bottom_half_ * e_theta_dot;
 
     RCLCPP_INFO_STREAM(get_logger(), "u_output before offset " << u);
-    float u_offset = 56 * sin(theta);
+    float u_offset = 56 * sin(theta_des_);
+    if (u_offset < 0) {
+            u_offset = -1 * u_offset;
+    }
     u += u_offset;
     RCLCPP_INFO_STREAM(get_logger(), "u_output after offset " << u);
     // === 6. Clamp u to be within [-62, 62] ===
@@ -279,7 +295,7 @@ private:
   rclcpp::TimerBase::SharedPtr vertiq_test_timer_;
   bool vertiq_test_done_ = false;
 
-  float theta_des_ = std::numeric_limits<float>::quiet_NaN();
+  float theta_des_ = -1.57;
   float phi_des_ = std::numeric_limits<float>::quiet_NaN();
   float k_p_bottom_half_ = 0.0;
   float k_d_bottom_half_ = 0.0;
