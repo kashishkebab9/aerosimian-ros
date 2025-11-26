@@ -6,6 +6,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "aerosimian/msg/aero_simian_state.hpp"
+#include "aerosimian/msg/aero_simian_control.hpp"
 
 #include "moteus.h"  // <-- IMPORTANT
 #include "aerosimian/vertiq.hpp"
@@ -15,16 +16,19 @@ using namespace std::chrono_literals;
 class AeroSimianPhiStateNode : public rclcpp::Node {
 public:
   AeroSimianPhiStateNode()
-  : rclcpp::Node("aerosimian_full_state_node"),
+  : rclcpp::Node("aerosimian_phi_state_node"),
     controller_(make_controller_options())
   {
     vertiq_port_ = this->declare_parameter("vertiq_port", "/dev/ttyUSB0");
-      RCLCPP_INFO(get_logger(), "1");
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
-      RCLCPP_INFO(get_logger(), "2");
+    k_p_bottom_half_ = this->declare_parameter<double>("k_p_bottom_half", 0.0);
+    k_d_bottom_half_ = this->declare_parameter<double>("k_d_bottom_half", 0.0);
+    k_i_bottom_half_ = this->declare_parameter<double>("k_i_bottom_half", 0.0);
+    RCLCPP_INFO_STREAM(get_logger(), "P gain for bottom half controller: " << k_p_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller: " << k_i_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller: " << k_d_bottom_half_);
     // Clear any existing faults.
     controller_.SetStop();
-      RCLCPP_INFO(get_logger(), "3");
 
     // Subscribe to theta/theta_dot
     theta_sub_ = this->create_subscription<aerosimian::msg::AeroSimianState>(
@@ -32,25 +36,20 @@ public:
       10,
       std::bind(&AeroSimianPhiStateNode::thetaCallback, this, std::placeholders::_1));
 
-      RCLCPP_INFO(get_logger(), "4");
     // Publish full state
     state_pub_ = this->create_publisher<aerosimian::msg::AeroSimianState>(
       "/aerosimian/state", 10);
 
-      RCLCPP_INFO(get_logger(), "5");
     // Timer to poll moteus and publish combined state
     timer_ = this->create_wall_timer(
       20ms,  // 50 Hz
       std::bind(&AeroSimianPhiStateNode::timerCallback, this));
 
-      RCLCPP_INFO(get_logger(), "6");
     vertiq_ = std::make_unique<VertiqHeartbeat>(vertiq_port_, vertiq_baud_);
 
     if (vertiq_->start()) {
-      RCLCPP_INFO(get_logger(), "7");
       RCLCPP_INFO(get_logger(), "Vertiq heartbeat started");
     } else {
-      RCLCPP_INFO(get_logger(), "8");
       RCLCPP_WARN(get_logger(), "Failed to open Vertiq at %s", vertiq_port_.c_str());
     }
 
@@ -66,16 +65,27 @@ public:
     //     driveMoteus(0.0f);
     //     test_drive_done_ = true;
     //   });
-    vertiq_test_timer_ = this->create_wall_timer(
-       2s,  // run once, 2 seconds after startup
-      [this]() {
-        if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
-          RCLCPP_INFO(this->get_logger(),
-                      "Hardware test: sending SET 50,50,50,50");
-          vertiq_->sendSet(50, 50, 50, 50);
-          vertiq_test_done_ = true;
-        }
-      });
+    // vertiq_test_timer_ = this->create_wall_timer(
+    //    2s,  // run once, 2 seconds after startup
+    //   [this]() {
+    //     if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+    //       RCLCPP_INFO(this->get_logger(),
+    //                   "Hardware test: sending SET 50,50,50,50");
+    //       vertiq_->sendSet(50, 50, 50, 50);
+    //       vertiq_test_done_ = true;
+    //     }
+    //   });
+    
+    // Closed Loop Bottom Hemisphere Control
+    // 1. Create a timer that runs at 100hz
+    // 2. Write a service client that writes to member variables that initialize as nan
+    
+    control_timer_ = this->create_wall_timer(
+        10ms,   // 100 Hz period
+        std::bind(&AeroSimianPhiStateNode::control_loop, this)
+    );
+
+
 
 
     RCLCPP_INFO(this->get_logger(), "AeroSimianPhiStateNode started");
@@ -182,7 +192,17 @@ private:
       phi,
       r.position,
       r.velocity);
- }
+  }
+
+  void control_loop() {
+    if (std::isnan(this->theta_des_) || std::isnan(this->phi_des_)) {
+        return;
+    }
+    // Calculate Error term for theta:
+    float e_theta = this->theta_des_ - this->last_state_.theta;
+
+    // 
+  }
 
 
   // ROS bits
@@ -209,6 +229,13 @@ private:
   bool test_drive_done_ = false;
   rclcpp::TimerBase::SharedPtr vertiq_test_timer_;
   bool vertiq_test_done_ = false;
+
+  float theta_des_ = std::numeric_limits<float>::quiet_NaN();
+  float phi_des_ = std::numeric_limits<float>::quiet_NaN();
+  float k_p_bottom_half_ = 0.0;
+  float k_d_bottom_half_ = 0.0;
+  float k_i_bottom_half_ = 0.0;
+  rclcpp::TimerBase::SharedPtr control_timer_;
 };
 
 int main(int argc, char ** argv) {

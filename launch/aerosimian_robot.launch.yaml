@@ -19,4 +19,10 @@ launch:
           param:
             - name: moteus_id
               value: 1   # override in other launch files if needed
+            - name: k_p_bottom_half
+              value: 1.25  # example
+            - name: k_d_bottom_half
+              value: 0.01  # example
+            - name: k_i_bottom_half
+              value: 0.01 # example
 
