@@ -82,7 +82,7 @@ public:
     
     control_timer_ = this->create_wall_timer(
         10ms,   // 100 Hz period
-        std::bind(&AeroSimianPhiStateNode::control_loop, this)
+        std::bind(&AeroSimianPhiStateNode::control_loop_bottom_half, this)
     );
 
 
@@ -194,15 +194,60 @@ private:
       r.velocity);
   }
 
-  void control_loop() {
+  void control_loop_bottom_half() {
+    // Don’t do anything until someone sets desired angles
     if (std::isnan(this->theta_des_) || std::isnan(this->phi_des_)) {
-        return;
+      return;
     }
-    // Calculate Error term for theta:
-    float e_theta = this->theta_des_ - this->last_state_.theta;
 
-    // 
+    // === 1. Get current theta (optionally under a mutex) ===
+    // If you want to be strict about thread-safety:
+    aerosimian::msg::AeroSimianState state_copy;
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      state_copy = last_state_;
+    }
+    float theta = state_copy.theta;
+
+    // === 2. Error term ===
+    float e_theta = this->theta_des_ - theta;
+
+    // Assume control_timer_ is 100 Hz → dt = 0.01 s
+    constexpr float dt = 0.01f;
+
+    // === 3. Integral of error ===
+    theta_error_int_ += e_theta * dt;
+
+    // (Optional) anti-windup on integral term
+    const float I_MAX = 100.0f;  // tune this
+    if (theta_error_int_ > I_MAX)  theta_error_int_ = I_MAX;
+    if (theta_error_int_ < -I_MAX) theta_error_int_ = -I_MAX;
+
+    // === 4. Derivative of error ===
+    float e_theta_dot = 0.0f;
+    if (have_prev_error_) {
+      e_theta_dot = (e_theta - prev_theta_error_) / dt;
+    }
+    prev_theta_error_ = e_theta;
+    have_prev_error_ = true;
+
+    // === 5. PID control law ===
+    float u = 0.0f;
+    u += this->k_p_bottom_half_ * e_theta;
+    u += this->k_i_bottom_half_ * theta_error_int_;
+    u += this->k_d_bottom_half_ * e_theta_dot;
+
+    // === 6. Clamp u to be within [-62, 62] ===
+    const float U_MIN = 0.0f;
+    const float U_MAX = 62.0f;
+    if (u > U_MAX)  u = U_MAX;
+    if (u < U_MIN) u = U_MIN;
+    RCLCPP_INFO_STREAM(get_logger(), "u_output " << u);
+
+    return;
+
   }
+
 
 
   // ROS bits
@@ -236,6 +281,11 @@ private:
   float k_d_bottom_half_ = 0.0;
   float k_i_bottom_half_ = 0.0;
   rclcpp::TimerBase::SharedPtr control_timer_;
+  // PID state (bottom hemisphere)
+  float theta_error_int_ = 0.0f;   // integral of error
+  float prev_theta_error_ = 0.0f;  // previous error
+  bool  have_prev_error_ = false;  // for first-iteration handling
+
 };
 
 int main(int argc, char ** argv) {
