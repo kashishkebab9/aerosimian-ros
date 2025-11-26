@@ -242,7 +242,10 @@ private:
     const float U_MAX = 62.0f;
     if (u > U_MAX)  u = U_MAX;
     if (u < U_MIN) u = U_MIN;
-    RCLCPP_INFO_STREAM(get_logger(), "u_output " << u);
+    RCLCPP_INFO_STREAM(get_logger(), "u_output before offset " << u);
+    float u_offset = 56 * sin(theta);
+    u += u_offset;
+    RCLCPP_INFO_STREAM(get_logger(), "u_output after offset " << u);
 
     return;
 
