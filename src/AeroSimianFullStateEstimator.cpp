@@ -215,7 +215,7 @@ private:
     Eigen::Vector2d current_state;      // 2x1 vector of doubles
     current_state << length *sin(theta), -1*length * cos(theta);
     Eigen::Vector2d desired_state;      // 2x1 vector of doubles
-    desired_state << length *sin(theta), -1*length * cos(theta);
+    desired_state << length *sin(theta_des_), -1*length * cos(theta_des_);
 
     double a_x = desired_state(0) - current_state(0);
     double a_y = desired_state(1) - current_state(1) + gravity;
@@ -228,6 +228,8 @@ private:
     double thrust = sqrt(std::pow(a_x, 2.0) + std::pow(a_y, 2.0));
 
     RCLCPP_INFO_STREAM(get_logger(), "Theta: " << theta);
+    RCLCPP_INFO_STREAM(get_logger(), "desired_state: " << desired_state);
+    RCLCPP_INFO_STREAM(get_logger(), "current_state: " << current_state);
     RCLCPP_INFO_STREAM(get_logger(), "Thrust: " << thrust);
     RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
     RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
