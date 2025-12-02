@@ -89,6 +89,7 @@ rosidl_target_interfaces(aerosimian_full_state_node
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 
+target_link_libraries(aerosimian_full_state_node Eigen3::Eigen)
 # link moteus for driver (plain form)
 if (TARGET moteus::cpp)
   target_link_libraries(driver moteus::cpp)

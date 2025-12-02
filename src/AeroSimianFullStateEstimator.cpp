@@ -3,6 +3,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <Eigen/Dense>
 
 #include "rclcpp/rclcpp.hpp"
 #include "aerosimian/msg/aero_simian_state.hpp"
@@ -142,7 +143,7 @@ private:
       "moteus: mode=%d, phi=%.4f rad, phi_dot=%.4f rad/s, torque=%.4f Nm",
       static_cast<int>(r.mode),
       phi,
-      phi_dot,*
+      phi_dot,
       static_cast<double>(r.torque));
   }
 
