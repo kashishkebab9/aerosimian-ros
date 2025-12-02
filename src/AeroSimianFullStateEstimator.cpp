@@ -84,6 +84,7 @@ private:
   }
 
   void thetaCallback(const aerosimian::msg::AeroSimianState::SharedPtr msg) {
+  
     std::lock_guard<std::mutex> lock(theta_mutex_);
     latest_theta_state_ = *msg;
     have_theta_ = true;
@@ -177,7 +178,7 @@ private:
   void control_loop_bottom_half() {
     RCLCPP_INFO_STREAM(get_logger(), "here 1");
     // Don’t do anything until someone sets desired angles
-    if (std::isnan(this->theta_des_) ) {
+    if (std::isnan(this->theta_des_) || !have_theta_ ) {
       return;
     }
         RCLCPP_INFO_STREAM(get_logger(), "here 3");
@@ -189,6 +190,7 @@ private:
       std::lock_guard<std::mutex> lock(state_mutex_);
       state_copy = last_state_;
     }
+    RCLCPP_INFO_STREAM(get_logger(), "state_copy.theta: " << state_copy.theta);
     float theta = state_copy.theta;
     float phi = state_copy.phi;
 
@@ -225,7 +227,11 @@ private:
     double thrust_gain = .7;
     double thrust = sqrt(std::pow(a_x, 2.0) + std::pow(a_y, 2.0));
 
+    RCLCPP_INFO_STREAM(get_logger(), "Theta: " << theta);
     RCLCPP_INFO_STREAM(get_logger(), "Thrust: " << thrust);
+    RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
+    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
+    RCLCPP_INFO_STREAM(get_logger(), "phi des: " << phi_des);
 
 
     return;
@@ -259,7 +265,7 @@ private:
   rclcpp::TimerBase::SharedPtr vertiq_test_timer_;
   bool vertiq_test_done_ = false;
 
-  float theta_des_ = std::numeric_limits<float>::quiet_NaN();
+  float theta_des_ = -M_PI/2;
   float k_p_theta_bottom_half_ = 0.0;
   float k_d_theta_bottom_half_ = 0.0;
   float k_i_theta_bottom_half_ = 0.0;
