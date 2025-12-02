@@ -21,12 +21,18 @@ public:
   {
     vertiq_port_ = this->declare_parameter("vertiq_port", "/dev/ttyUSB0");
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
-    k_p_bottom_half_ = this->declare_parameter<double>("k_p_bottom_half", 0.0);
-    k_d_bottom_half_ = this->declare_parameter<double>("k_d_bottom_half", 0.0);
-    k_i_bottom_half_ = this->declare_parameter<double>("k_i_bottom_half", 0.0);
-    RCLCPP_INFO_STREAM(get_logger(), "P gain for bottom half controller: " << k_p_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller: " << k_i_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller: " << k_d_bottom_half_);
+    k_p_theta_bottom_half_ = this->declare_parameter<double>("k_p_theta_bottom_half", 0.0);
+    k_d_theta_bottom_half_ = this->declare_parameter<double>("k_d_theta_bottom_half", 0.0);
+    k_i_theta_bottom_half_ = this->declare_parameter<double>("k_i_theta_bottom_half", 0.0);
+    k_p_phi_bottom_half_ = this->declare_parameter<double>("k_p_phi_bottom_half", 0.0);
+    k_d_phi_bottom_half_ = this->declare_parameter<double>("k_d_phi_bottom_half", 0.0);
+    k_i_phi_bottom_half_ = this->declare_parameter<double>("k_i_phi_bottom_half", 0.0);
+    RCLCPP_INFO_STREAM(get_logger(), "P gain for bottom half controller Theta: " << k_p_theta_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller Theta: " << k_i_theta_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller Theta: " << k_d_theta_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "P gain for bottom half controller PHI: " << k_p_phi_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller PHI: " << k_i_phi_bottom_half_);
+    RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller PHI: " << k_d_phi_bottom_half_);
     // Clear any existing faults.
     controller_.SetStop();
 
@@ -52,33 +58,6 @@ public:
     } else {
       RCLCPP_WARN(get_logger(), "Failed to open Vertiq at %s", vertiq_port_.c_str());
     }
-
-    // === Hardware test: single drive to phi = 0 ===
-    // drive_test_timer_ = this->create_wall_timer(
-    //   2s,
-    //   [this]() {
-    //     if (test_drive_done_) {
-    //       return;
-    //     }
-    //     RCLCPP_INFO(this->get_logger(),
-    //                 "Hardware test: calling driveMoteus(0.0 rad)");
-    //     driveMoteus(0.0f);
-    //     test_drive_done_ = true;
-    //   });
-    // vertiq_test_timer_ = this->create_wall_timer(
-    //    2s,  // run once, 2 seconds after startup
-    //   [this]() {
-    //     if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
-    //       RCLCPP_INFO(this->get_logger(),
-    //                   "Hardware test: sending SET 50,50,50,50");
-    //       vertiq_->sendSet(50, 50, 50, 50);
-    //       vertiq_test_done_ = true;
-    //     }
-    //   });
-
-    // Closed Loop Bottom Hemisphere Control
-    // 1. Create a timer that runs at 100hz
-    // 2. Write a service client that writes to member variables that initialize as nan
 
     control_timer_ = this->create_wall_timer(
         10ms,   // 100 Hz period
@@ -163,7 +142,7 @@ private:
       "moteus: mode=%d, phi=%.4f rad, phi_dot=%.4f rad/s, torque=%.4f Nm",
       static_cast<int>(r.mode),
       phi,
-      phi_dot,
+      phi_dot,*
       static_cast<double>(r.torque));
   }
 
@@ -197,8 +176,7 @@ private:
   void control_loop_bottom_half() {
     RCLCPP_INFO_STREAM(get_logger(), "here 1");
     // Don’t do anything until someone sets desired angles
-    if (std::isnan(this->theta_des_) &&  std::isnan(this->phi_des_)) {
-        RCLCPP_INFO_STREAM(get_logger(), "here 2");
+    if (std::isnan(this->theta_des_) ) {
       return;
     }
         RCLCPP_INFO_STREAM(get_logger(), "here 3");
@@ -211,6 +189,7 @@ private:
       state_copy = last_state_;
     }
     float theta = state_copy.theta;
+    float phi = state_copy.phi;
 
     // === 2. Error term ===
     float e_theta;
@@ -227,52 +206,26 @@ private:
 
     // Assume control_timer_ is 100 Hz → dt = 0.01 s
     constexpr float dt = 0.01f;
+    const double length  = .3175; // m
+    const double gravity  = 9.81; // m
 
-    // === 3. Integral of error ===
-    theta_error_int_ += e_theta * dt;
+    Eigen::Vector2d current_state;      // 2x1 vector of doubles
+    current_state << length *sin(theta), -1*length * cos(theta);
+    Eigen::Vector2d desired_state;      // 2x1 vector of doubles
+    desired_state << length *sin(theta), -1*length * cos(theta);
 
-    // (Optional) anti-windup on integral term
-    const float I_MAX = 100.0f;  // tune this
-    if (theta_error_int_ > I_MAX)  theta_error_int_ = I_MAX;
-    if (theta_error_int_ < -I_MAX) theta_error_int_ = -I_MAX;
+    double a_x = desired_state(0) - current_state(0);
+    double a_y = desired_state(1) - current_state(1) + gravity;
 
-    // === 4. Derivative of error ===
-    float e_theta_dot = 0.0f;
-    if (have_prev_error_) {
-      e_theta_dot = (e_theta - prev_theta_error_) / dt;
-    }
-    prev_theta_error_ = e_theta;
-    have_prev_error_ = true;
+    // get desired phi angle
+    double phi_des = atan2(a_y, a_x) - (M_PI/2);
 
-    // === 5. PID control law ===
-    float u = 0.0f;
-    u += this->k_p_bottom_half_ * e_theta;
-    u += this->k_i_bottom_half_ * theta_error_int_;
-    u += this->k_d_bottom_half_ * e_theta_dot;
+    // get thrust from linear gain on acceleration vector
+    double thrust_gain = .7;
+    double thrust = sqrt(std::pow(a_x, 2.0) + std::pow(a_y, 2.0));
 
-    RCLCPP_INFO_STREAM(get_logger(), "u_output before offset " << u);
-    float u_offset = 56 * sin(theta_des_);
-    if (u_offset < 0) {
-            u_offset = -1 * u_offset;
-    }
-    u += u_offset;
-    RCLCPP_INFO_STREAM(get_logger(), "u_output after offset " << u);
-    // === 6. Clamp u to be within [-62, 62] ===
-    const float U_MIN = 0.0f;
-    const float U_MAX = 62.0f;
-    if (u > U_MAX)  u = U_MAX;
-    if (u < U_MIN) u = U_MIN;
+    RCLCPP_INFO_STREAM(get_logger(), "Thrust: " << thrust);
 
-    RCLCPP_INFO_STREAM(get_logger(), "u_output after clamping " << u);
-
-    if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
-      RCLCPP_INFO(this->get_logger(),
-                  "Hardware test: sending SET 50,50,50,50");
-      vertiq_->sendSet(u, u, u, u);
-      this->phi_des_ = -1 * theta_des_;
-      driveMoteus(phi_des_);
-
-    }
 
     return;
 
@@ -305,11 +258,13 @@ private:
   rclcpp::TimerBase::SharedPtr vertiq_test_timer_;
   bool vertiq_test_done_ = false;
 
-  float theta_des_ = -1.57;
-  float phi_des_ = std::numeric_limits<float>::quiet_NaN();
-  float k_p_bottom_half_ = 0.0;
-  float k_d_bottom_half_ = 0.0;
-  float k_i_bottom_half_ = 0.0;
+  float theta_des_ = std::numeric_limits<float>::quiet_NaN();
+  float k_p_theta_bottom_half_ = 0.0;
+  float k_d_theta_bottom_half_ = 0.0;
+  float k_i_theta_bottom_half_ = 0.0;
+  float k_p_phi_bottom_half_ = 0.0;
+  float k_d_phi_bottom_half_ = 0.0;
+  float k_i_phi_bottom_half_ = 0.0;
   rclcpp::TimerBase::SharedPtr control_timer_;
   // PID state (bottom hemisphere)
   float theta_error_int_ = 0.0f;   // integral of error
