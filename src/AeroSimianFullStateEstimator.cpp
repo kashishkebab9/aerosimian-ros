@@ -35,7 +35,7 @@ public:
     RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller PHI: " << k_i_phi_bottom_half_);
     RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller PHI: " << k_d_phi_bottom_half_);
 
-    grav_normalization_term_ = this->declare_parameter<double>("grav_normalization_term_", 1.0);
+    grav_normalization_term_ = this->declare_parameter<double>("grav_normalization_term", 1.0);
     // Clear any existing faults.
     controller_.SetStop();
 
@@ -86,7 +86,7 @@ private:
   }
 
   void thetaCallback(const aerosimian::msg::AeroSimianState::SharedPtr msg) {
-  
+
     std::lock_guard<std::mutex> lock(theta_mutex_);
     latest_theta_state_ = *msg;
     have_theta_ = true;
@@ -196,34 +196,41 @@ private:
     float theta = state_copy.theta;
     float phi = state_copy.phi;
 
-    // === 2. Error term ===
-    float e_theta;
-    if (this->theta_des_ < 0) {
-            if (theta < 0) {
-                    e_theta = -1 *(theta_des_ - theta);
-            } else {
-                    e_theta = std::abs(theta_des_ - theta);
-            }
-    } else {
-            e_theta = theta_des_ - theta;
-            }
-    RCLCPP_INFO_STREAM(get_logger(), "e_theta: " << e_theta);
 
     // Assume control_timer_ is 100 Hz → dt = 0.01 s
     constexpr float dt = 0.01f;
     const double length  = .3175; // m
-    const double gravity  = 9.81; // m
+    const double gravity  = 9.81; // m/s^2
 
     Eigen::Vector2d current_state;      // 2x1 vector of doubles
-    current_state << length *sin(theta), -1*length * cos(theta);
+    current_state << length *cos(theta), length * sin(theta);
     Eigen::Vector2d desired_state;      // 2x1 vector of doubles
-    desired_state << length *sin(theta_des_), -1*length * cos(theta_des_);
+    desired_state << length *cos(theta_des_), length * sin(theta_des_);
 
-    double a_x = grav_normalization_term_ * (desired_state(0) - current_state(0));
-    double a_y = grav_normalization_term_ * (desired_state(1) - current_state(1)) + gravity;
+    double a_x = desired_state(0) - current_state(0);
+    double a_y =   desired_state(1) - current_state(1)  ;
+    RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
+    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
 
+    double grav_term = sin(theta) * gravity;
+    a_x *= grav_normalization_term_;
+    a_y *= grav_normalization_term_;
+    RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
+    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
+    a_y += std::abs(grav_term);
+
+    RCLCPP_INFO_STREAM(get_logger(), "grav_term: " << grav_term);
+    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
     // get desired phi angle
-    double phi_des = atan2(a_y, a_x) - (M_PI/2);
+
+    Eigen::Vector2d acceleration_vec;      // 2x1 vector of doubles
+    acceleration_vec << a_x, a_y;
+
+    double phi_des = acceleration_vec.dot(current_state) ;
+    phi_des = std::acos(phi_des / (acceleration_vec.norm() * current_state.norm()));
+    RCLCPP_INFO_STREAM(get_logger(), "phi des: " << phi_des);
+    phi_des = phi_des - M_PI/2;
+    RCLCPP_INFO_STREAM(get_logger(), "phi des after removing pi/2: " << phi_des);
 
     // get thrust from linear gain on acceleration vector
     double thrust_gain = .7;
@@ -233,9 +240,6 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "desired_state: " << desired_state);
     RCLCPP_INFO_STREAM(get_logger(), "current_state: " << current_state);
     RCLCPP_INFO_STREAM(get_logger(), "Thrust: " << thrust);
-    RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
-    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
-    RCLCPP_INFO_STREAM(get_logger(), "phi des: " << phi_des);
 
 
     return;
@@ -295,4 +299,3 @@ int main(int argc, char ** argv) {
   rclcpp::shutdown();
   return 0;
 }
-
