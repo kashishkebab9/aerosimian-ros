@@ -24,6 +24,7 @@ public:
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
     k_p_phi_ = this->declare_parameter<double>("k_p_phi", 0.0);
     k_d_phi_ = this->declare_parameter<double>("k_d_phi", 0.0);
+    thrust_gain_ = this->declare_parameter<double>("thrust_gain", 0.5);
 
     grav_normalization_term_ = this->declare_parameter<double>("grav_normalization_term", 1.0);
     // Clear any existing faults.
@@ -84,13 +85,9 @@ private:
 
   void timerCallback() {
     // Query moteus: leave fields as NaN to avoid changing command
-    mjbots::moteus::PositionMode::Command cmd;
-    cmd.position = std::numeric_limits<double>::quiet_NaN();
-    cmd.velocity = std::numeric_limits<double>::quiet_NaN();
-    cmd.feedforward_torque = std::numeric_limits<double>::quiet_NaN();
 
 
-    const auto maybe_result = controller_.SetPosition(cmd);
+    const auto maybe_result = controller_.SetQuery();
     if (!maybe_result) {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 2000,
@@ -147,12 +144,8 @@ private:
     constexpr double TWO_PI = 2.0 * M_PI;
 
     float moteus_center_rads = moteus_center_revs_  * TWO_PI;
-    mjbots::moteus::PositionMode::Command cmd;
-    cmd.position = phi + moteus_center_rads ;
-    cmd.position = cmd.position/TWO_PI;
-    cmd.velocity = 1.0;            // commanded velocity [rev/s]
 
-    const auto maybe_result = controller_.SetPosition(cmd);
+    const auto maybe_result = controller_.SetQuery();
 
     if (!maybe_result) {
       RCLCPP_WARN_THROTTLE(
@@ -227,9 +220,8 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "phi des after removing pi/2: " << phi_des);
 
     // get thrust from linear gain on acceleration vector
-    double thrust_gain = .75;
     double thrust = sqrt(std::pow(a_x, 2.0) + std::pow(a_y, 2.0));
-    thrust = thrust * thrust_gain;
+    thrust = thrust * thrust_gain_;
 
     RCLCPP_INFO_STREAM(get_logger(), "Theta: " << theta);
     RCLCPP_INFO_STREAM(get_logger(), "desired_state: " << desired_state);
@@ -265,19 +257,19 @@ private:
     double pwm_1 = thrustToDuty(thrust_1);
     double pwm_2 = thrustToDuty(thrust_2);
     double pwm_3 = thrustToDuty(thrust_3);
+    pwm_0 *= 100;
+    pwm_1 *= 100;
+    pwm_2 *= 100;
+    pwm_3 *= 100;
     RCLCPP_INFO_STREAM(get_logger(), "pwm_0: " << pwm_0);
     RCLCPP_INFO_STREAM(get_logger(), "pwm_1: " << pwm_1);
     RCLCPP_INFO_STREAM(get_logger(), "pwm_2: " << pwm_2);
     RCLCPP_INFO_STREAM(get_logger(), "pwm_3: " << pwm_3);
     // convert to pwm
 
-    // if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
-    //   RCLCPP_INFO(this->get_logger(),
-    //               "Hardware test: sending SET 50,50,50,50");
-    //   vertiq_->sendSet(thrust_0, thrust_1,thrust_2, thrust_3);
-    //   // this->phi_des_ = -1 * theta_des_;
-    //   //driveMoteus(phi_des_);
-    // }
+    if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+      vertiq_->sendSet(pwm_0, pwm_1,pwm_2, pwm_3);
+    }
 
     return;
 
@@ -287,7 +279,7 @@ private:
     if (x < 0.0) x = 0.0;
     if (x > 0.8) x = 0.8;
 
-    return 0.431 + 0.945 * x - 0.653 * x * x;
+    return 0.431 + 0.0964 * x - 6.79e-03 * x * x;
   }
 
 
@@ -328,6 +320,7 @@ private:
   bool  have_prev_error_ = false;  // for first-iteration handling
 
   float grav_normalization_term_ = 1.0;
+  float thrust_gain_ = 1.0;
 };
 
 int main(int argc, char ** argv) {
