@@ -256,9 +256,40 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "thrust_left: " << thrust_left);
     RCLCPP_INFO_STREAM(get_logger(), "thrust_right: " << thrust_right);
 
+    double thrust_0 = thrust_left / 2;
+    double thrust_1 = thrust_right / 2;
+    double thrust_2 = thrust_right / 2;
+    double thrust_3 = thrust_left / 2;
+
+    double pwm_0 = thrustToDuty(thrust_0);
+    double pwm_1 = thrustToDuty(thrust_1);
+    double pwm_2 = thrustToDuty(thrust_2);
+    double pwm_3 = thrustToDuty(thrust_3);
+    RCLCPP_INFO_STREAM(get_logger(), "pwm_0: " << pwm_0);
+    RCLCPP_INFO_STREAM(get_logger(), "pwm_1: " << pwm_1);
+    RCLCPP_INFO_STREAM(get_logger(), "pwm_2: " << pwm_2);
+    RCLCPP_INFO_STREAM(get_logger(), "pwm_3: " << pwm_3);
+    // convert to pwm
+
+    // if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+    //   RCLCPP_INFO(this->get_logger(),
+    //               "Hardware test: sending SET 50,50,50,50");
+    //   vertiq_->sendSet(thrust_0, thrust_1,thrust_2, thrust_3);
+    //   // this->phi_des_ = -1 * theta_des_;
+    //   //driveMoteus(phi_des_);
+    // }
+
     return;
 
   }
+  double thrustToDuty(double x) {
+    // Clamp input for safety
+    if (x < 0.0) x = 0.0;
+    if (x > 0.8) x = 0.8;
+
+    return 0.431 + 0.945 * x - 0.653 * x * x;
+  }
+
 
 
 
