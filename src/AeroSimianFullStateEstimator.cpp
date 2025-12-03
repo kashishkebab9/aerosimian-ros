@@ -22,12 +22,13 @@ public:
   {
     vertiq_port_ = this->declare_parameter("vertiq_port", "/dev/ttyUSB0");
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
-    k_p_phi_ = this->declare_parameter<double>("k_p_phi", 0.0);
-    k_d_phi_ = this->declare_parameter<double>("k_d_phi", 0.0);
+    k_p_theta_ = this->declare_parameter<double>("k_p_theta", 1.0);
+    k_d_theta_ = this->declare_parameter<double>("k_d_theta", 1.0);
+    k_p_phi_ = this->declare_parameter<double>("k_p_phi", 1.0);
+    k_d_phi_ = this->declare_parameter<double>("k_d_phi", 1.0);
     thrust_gain_ = this->declare_parameter<double>("thrust_gain", 0.5);
     I_term_ = this->declare_parameter<double>("I_term", 0.005);
 
-    grav_normalization_term_ = this->declare_parameter<double>("grav_normalization_term", 1.0);
     // Clear any existing faults.
     controller_.SetStop();
 
@@ -165,12 +166,10 @@ private:
   }
 
   void control_loop_bottom_half() {
-    RCLCPP_INFO_STREAM(get_logger(), "here 1");
     // Don’t do anything until someone sets desired angles
     if (std::isnan(this->theta_des_) || !have_theta_ ) {
       return;
     }
-        RCLCPP_INFO_STREAM(get_logger(), "here 3");
 
     // === 1. Get current theta (optionally under a mutex) ===
     // If you want to be strict about thread-safety:
@@ -195,24 +194,40 @@ private:
     Eigen::Vector2d desired_state;      // 2x1 vector of doubles
     desired_state << length *cos(theta_des_), length * sin(theta_des_);
 
-    double a_x = desired_state(0) - current_state(0);
-    double a_y =   desired_state(1) - current_state(1)  ;
-    RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
-    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
+    Eigen::Vector2d e = desired_state - current_state;
 
-    double grav_term = sin(theta) * gravity;
-    a_x *= grav_normalization_term_;
-    a_y *= grav_normalization_term_;
-    RCLCPP_INFO_STREAM(get_logger(), "ax: " << a_x);
-    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
-    a_y += std::abs(grav_term);
+    double theta_dot_des = 0.0;   // unless you have a trajectory
 
-    RCLCPP_INFO_STREAM(get_logger(), "grav_term: " << grav_term);
-    RCLCPP_INFO_STREAM(get_logger(), "ay: " << a_y);
+    // Compute current Cartesian velocity
+    Eigen::Vector2d xdot;
+    xdot << -length * std::sin(theta) * theta_dot,
+             length * std::cos(theta) * theta_dot;
+    
+    // Compute desired Cartesian velocity
+    Eigen::Vector2d xdot_des;
+    xdot_des << -length * std::sin(theta_des_) * theta_dot_des,
+                 length * std::cos(theta_des_) * theta_dot_des;
+    
+    // Error rate: e_dot = xdot_des - xdot
+    Eigen::Vector2d e_dot = xdot_des - xdot;
+    
+    RCLCPP_INFO_STREAM(get_logger(), "e x: " << e(0)
+                                                 << "  e y: " << e(1));
+    RCLCPP_INFO_STREAM(get_logger(), "e_dot x: " << e_dot(0)
+                                                 << "  e_dot y: " << e_dot(1));
+    Eigen::Vector2d acceleration_vec =
+      k_p_theta_ * e
+    + k_d_theta_ * e_dot;
+
+    RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec x: " << acceleration_vec(0)
+                                                 << "  acceleration_vec y: " << acceleration_vec(1));
+    // gravity comp
+    double grav_term = gravity * std::sin(theta);
+    acceleration_vec(1) += std::abs(grav_term);
+    RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
+                                                 << "  acceleration_vec after grav y: " << acceleration_vec(1));
+
     // get desired phi angle
-
-    Eigen::Vector2d acceleration_vec;      // 2x1 vector of doubles
-    acceleration_vec << a_x, a_y;
 
     double phi_des = acceleration_vec.dot(current_state) ;
     phi_des = std::acos(phi_des / (acceleration_vec.norm() * current_state.norm()));
@@ -221,7 +236,7 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "phi des after removing pi/2: " << phi_des);
 
     // get thrust from linear gain on acceleration vector
-    double thrust = sqrt(std::pow(a_x, 2.0) + std::pow(a_y, 2.0));
+    double thrust = sqrt(std::pow(acceleration_vec(0), 2.0) + std::pow(acceleration_vec(1), 2.0));
     thrust = thrust * thrust_gain_;
 
     RCLCPP_INFO_STREAM(get_logger(), "Theta: " << theta);
@@ -267,13 +282,14 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "pwm_3: " << pwm_3);
     // convert to pwm
 
-    if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
-      vertiq_->sendSet(pwm_0, pwm_1,pwm_2, pwm_3);
-    }
+    // if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+    //   vertiq_->sendSet(pwm_0, pwm_1,pwm_2, pwm_3);
+    // }
 
     return;
 
   }
+
   double thrustToDuty(double x) {
     // Clamp input for safety
     if (x < 0.0) x = 0.0;
@@ -281,9 +297,6 @@ private:
 
     return 0.431 + 0.0964 * x - 6.79e-03 * x * x;
   }
-
-
-
 
   // ROS bits
   rclcpp::Subscription<aerosimian::msg::AeroSimianState>::SharedPtr theta_sub_;
@@ -304,22 +317,21 @@ private:
   std::mutex state_mutex_;
   float moteus_center_revs_ = .38;
 
-  // TEST
   rclcpp::TimerBase::SharedPtr drive_test_timer_;
   bool test_drive_done_ = false;
   rclcpp::TimerBase::SharedPtr vertiq_test_timer_;
   bool vertiq_test_done_ = false;
 
+  float k_p_theta_ = 1.0;
+  float k_d_theta_ = 1.0;
   float theta_des_ = -M_PI/2;
-  float k_p_phi_ = 0.0;
-  float k_d_phi_ = 0.0;
+  float k_p_phi_ = 1.0;
+  float k_d_phi_ = 1.0;
   rclcpp::TimerBase::SharedPtr control_timer_;
-  // PID state (bottom hemisphere)
   float theta_error_int_ = 0.0f;   // integral of error
   float prev_theta_error_ = 0.0f;  // previous error
   bool  have_prev_error_ = false;  // for first-iteration handling
 
-  float grav_normalization_term_ = 1.0;
   float thrust_gain_ = 1.0;
   float I_term_ = 0.005;
 };
