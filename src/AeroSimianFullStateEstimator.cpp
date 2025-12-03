@@ -202,15 +202,15 @@ private:
     Eigen::Vector2d xdot;
     xdot << -length * std::sin(theta) * theta_dot,
              length * std::cos(theta) * theta_dot;
-    
+
     // Compute desired Cartesian velocity
     Eigen::Vector2d xdot_des;
     xdot_des << -length * std::sin(theta_des_) * theta_dot_des,
                  length * std::cos(theta_des_) * theta_dot_des;
-    
+
     // Error rate: e_dot = xdot_des - xdot
     Eigen::Vector2d e_dot = xdot_des - xdot;
-    
+
     RCLCPP_INFO_STREAM(get_logger(), "e x: " << e(0)
                                                  << "  e y: " << e(1));
     RCLCPP_INFO_STREAM(get_logger(), "e_dot x: " << e_dot(0)
@@ -226,13 +226,7 @@ private:
     acceleration_vec(1) += std::abs(grav_term);
     RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
                                                  << "  acceleration_vec after grav y: " << acceleration_vec(1));
-    
-    auto wrapToPi = [](double x) {
-      x = std::fmod(x + M_PI, 2.0 * M_PI);
-      if (x < 0.0)
-        x += 2.0 * M_PI;
-      return x - M_PI;
-    };
+
 
     // get desired phi angle
     // === Signed angle from current_state -> acceleration_vec ===
@@ -242,12 +236,17 @@ private:
 
     double phi_des = std::atan2(cross, dot);  // in (-pi, pi]
 
+    RCLCPP_INFO_STREAM(get_logger(), "phi_des_init: " << phi_des);
+
     // If you need a fixed offset (e.g. +pi/2), do it here:
-    double offset = M_PI ;
-    phi_des = wrapToPi(phi_des + offset);
+    if (phi_des < 0) {
+      phi_des += M_PI;
+    } else {
+      phi_des -= M_PI;
+    }
 
 
-    RCLCPP_INFO_STREAM(get_logger(), "phi_des (rad): " << phi_des);
+    RCLCPP_INFO_STREAM(get_logger(), "phi_des_after_wrap: " << phi_des);
 
 
     // get thrust from linear gain on acceleration vector
@@ -255,6 +254,7 @@ private:
     thrust = thrust * thrust_gain_;
 
     RCLCPP_INFO_STREAM(get_logger(), "Theta: " << theta);
+    RCLCPP_INFO_STREAM(get_logger(), "Theta_dot: " << theta_dot);
     RCLCPP_INFO_STREAM(get_logger(), "desired_state: " << desired_state);
     RCLCPP_INFO_STREAM(get_logger(), "current_state: " << current_state);
     RCLCPP_INFO_STREAM(get_logger(), "Thrust: " << thrust);
