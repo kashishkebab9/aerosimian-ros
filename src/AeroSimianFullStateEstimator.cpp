@@ -226,14 +226,29 @@ private:
     acceleration_vec(1) += std::abs(grav_term);
     RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
                                                  << "  acceleration_vec after grav y: " << acceleration_vec(1));
+    
+    auto wrapToPi = [](double x) {
+      x = std::fmod(x + M_PI, 2.0 * M_PI);
+      if (x < 0.0)
+        x += 2.0 * M_PI;
+      return x - M_PI;
+    };
 
     // get desired phi angle
+    // === Signed angle from current_state -> acceleration_vec ===
+    double dot   = current_state.dot(acceleration_vec);
+    double cross = current_state(0) * acceleration_vec(1)
+                 - current_state(1) * acceleration_vec(0);
 
-    double phi_des = acceleration_vec.dot(current_state) ;
-    phi_des = std::acos(phi_des / (acceleration_vec.norm() * current_state.norm()));
-    RCLCPP_INFO_STREAM(get_logger(), "phi des: " << phi_des);
-    phi_des = phi_des - M_PI/2;
-    RCLCPP_INFO_STREAM(get_logger(), "phi des after removing pi/2: " << phi_des);
+    double phi_des = std::atan2(cross, dot);  // in (-pi, pi]
+
+    // If you need a fixed offset (e.g. +pi/2), do it here:
+    double offset = M_PI ;
+    phi_des = wrapToPi(phi_des + offset);
+
+
+    RCLCPP_INFO_STREAM(get_logger(), "phi_des (rad): " << phi_des);
+
 
     // get thrust from linear gain on acceleration vector
     double thrust = sqrt(std::pow(acceleration_vec(0), 2.0) + std::pow(acceleration_vec(1), 2.0));
