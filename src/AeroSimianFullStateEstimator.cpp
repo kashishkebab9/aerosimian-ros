@@ -25,6 +25,7 @@ public:
     k_p_phi_ = this->declare_parameter<double>("k_p_phi", 0.0);
     k_d_phi_ = this->declare_parameter<double>("k_d_phi", 0.0);
     thrust_gain_ = this->declare_parameter<double>("thrust_gain", 0.5);
+    I_term_ = this->declare_parameter<double>("I_term", 0.005);
 
     grav_normalization_term_ = this->declare_parameter<double>("grav_normalization_term", 1.0);
     // Clear any existing faults.
@@ -231,8 +232,7 @@ private:
     // phi controller now
     double phi_error = phi_des - phi;
     double phi_double_dot = k_p_phi_ * phi_error - k_d_phi_ * phi_dot;
-    const double I = .006; // wild estimate
-    double torque_des = I * phi_double_dot;
+    double torque_des = I_term_ * phi_double_dot;
 
     const double rotor_arm_length = 0.094; // m
     double thrust_left = thrust/2 - (torque_des/(2*rotor_arm_length));
@@ -248,10 +248,10 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "thrust_left: " << thrust_left);
     RCLCPP_INFO_STREAM(get_logger(), "thrust_right: " << thrust_right);
 
-    double thrust_0 = thrust_left / 2;
-    double thrust_1 = thrust_right / 2;
-    double thrust_2 = thrust_right / 2;
+    double thrust_0 = thrust_right / 2;
+    double thrust_1 = thrust_left / 2;
     double thrust_3 = thrust_left / 2;
+    double thrust_2 = thrust_right / 2;
 
     double pwm_0 = thrustToDuty(thrust_0);
     double pwm_1 = thrustToDuty(thrust_1);
@@ -321,6 +321,7 @@ private:
 
   float grav_normalization_term_ = 1.0;
   float thrust_gain_ = 1.0;
+  float I_term_ = 0.005;
 };
 
 int main(int argc, char ** argv) {
