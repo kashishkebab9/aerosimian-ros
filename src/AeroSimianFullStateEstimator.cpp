@@ -22,18 +22,8 @@ public:
   {
     vertiq_port_ = this->declare_parameter("vertiq_port", "/dev/ttyUSB0");
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
-    k_p_theta_bottom_half_ = this->declare_parameter<double>("k_p_theta_bottom_half", 0.0);
-    k_d_theta_bottom_half_ = this->declare_parameter<double>("k_d_theta_bottom_half", 0.0);
-    k_i_theta_bottom_half_ = this->declare_parameter<double>("k_i_theta_bottom_half", 0.0);
-    k_p_phi_bottom_half_ = this->declare_parameter<double>("k_p_phi_bottom_half", 0.0);
-    k_d_phi_bottom_half_ = this->declare_parameter<double>("k_d_phi_bottom_half", 0.0);
-    k_i_phi_bottom_half_ = this->declare_parameter<double>("k_i_phi_bottom_half", 0.0);
-    RCLCPP_INFO_STREAM(get_logger(), "P gain for bottom half controller Theta: " << k_p_theta_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller Theta: " << k_i_theta_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller Theta: " << k_d_theta_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "P gain for bottom half controller PHI: " << k_p_phi_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "I gain for bottom half controller PHI: " << k_i_phi_bottom_half_);
-    RCLCPP_INFO_STREAM(get_logger(), "D gain for bottom half controller PHI: " << k_d_phi_bottom_half_);
+    k_p_phi_ = this->declare_parameter<double>("k_p_phi", 0.0);
+    k_d_phi_ = this->declare_parameter<double>("k_d_phi", 0.0);
 
     grav_normalization_term_ = this->declare_parameter<double>("grav_normalization_term", 1.0);
     // Clear any existing faults.
@@ -99,6 +89,7 @@ private:
     cmd.velocity = std::numeric_limits<double>::quiet_NaN();
     cmd.feedforward_torque = std::numeric_limits<double>::quiet_NaN();
 
+
     const auto maybe_result = controller_.SetPosition(cmd);
     if (!maybe_result) {
       RCLCPP_WARN_THROTTLE(
@@ -110,7 +101,8 @@ private:
     const auto & r = maybe_result->values;
 
     constexpr double TWO_PI = 2.0 * M_PI;
-    float phi     = static_cast<float>(r.position * TWO_PI);  // [rad]
+    RCLCPP_INFO_STREAM(get_logger(), "here 1");
+    float phi     = static_cast<float>((r.position- moteus_center_revs_) * TWO_PI);  // [rad]
     float phi_dot = static_cast<float>(r.velocity * TWO_PI);  // [rad/s]
 
     aerosimian::msg::AeroSimianState out_msg;
@@ -153,6 +145,7 @@ private:
   void driveMoteus(float phi) {
     // phi in radians
     constexpr double TWO_PI = 2.0 * M_PI;
+
     float moteus_center_rads = moteus_center_revs_  * TWO_PI;
     mjbots::moteus::PositionMode::Command cmd;
     cmd.position = phi + moteus_center_rads ;
@@ -192,9 +185,10 @@ private:
       std::lock_guard<std::mutex> lock(state_mutex_);
       state_copy = last_state_;
     }
-    RCLCPP_INFO_STREAM(get_logger(), "state_copy.theta: " << state_copy.theta);
     float theta = state_copy.theta;
     float phi = state_copy.phi;
+    float theta_dot = state_copy.theta_dot;
+    float phi_dot = state_copy.phi_dot;
 
 
     // Assume control_timer_ is 100 Hz → dt = 0.01 s
@@ -233,14 +227,34 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "phi des after removing pi/2: " << phi_des);
 
     // get thrust from linear gain on acceleration vector
-    double thrust_gain = .7;
+    double thrust_gain = .75;
     double thrust = sqrt(std::pow(a_x, 2.0) + std::pow(a_y, 2.0));
+    thrust = thrust * thrust_gain;
 
     RCLCPP_INFO_STREAM(get_logger(), "Theta: " << theta);
     RCLCPP_INFO_STREAM(get_logger(), "desired_state: " << desired_state);
     RCLCPP_INFO_STREAM(get_logger(), "current_state: " << current_state);
     RCLCPP_INFO_STREAM(get_logger(), "Thrust: " << thrust);
 
+    // phi controller now
+    double phi_error = phi_des - phi;
+    double phi_double_dot = k_p_phi_ * phi_error - k_d_phi_ * phi_dot;
+    const double I = .006; // wild estimate
+    double torque_des = I * phi_double_dot;
+
+    const double rotor_arm_length = 0.094; // m
+    double thrust_left = thrust/2 - (torque_des/(2*rotor_arm_length));
+    double thrust_right = thrust - thrust_left;
+
+    RCLCPP_INFO_STREAM(get_logger(), "phi_des: " << phi_des);
+    RCLCPP_INFO_STREAM(get_logger(), "phi: " << phi);
+    RCLCPP_INFO_STREAM(get_logger(), "phi_error: " << phi_error);
+    RCLCPP_INFO_STREAM(get_logger(), "k_p_phi_: " << k_p_phi_);
+    RCLCPP_INFO_STREAM(get_logger(), "phi_double_dot: " << phi_double_dot);
+
+    RCLCPP_INFO_STREAM(get_logger(), "torque_des: " << torque_des);
+    RCLCPP_INFO_STREAM(get_logger(), "thrust_left: " << thrust_left);
+    RCLCPP_INFO_STREAM(get_logger(), "thrust_right: " << thrust_right);
 
     return;
 
@@ -274,12 +288,8 @@ private:
   bool vertiq_test_done_ = false;
 
   float theta_des_ = -M_PI/2;
-  float k_p_theta_bottom_half_ = 0.0;
-  float k_d_theta_bottom_half_ = 0.0;
-  float k_i_theta_bottom_half_ = 0.0;
-  float k_p_phi_bottom_half_ = 0.0;
-  float k_d_phi_bottom_half_ = 0.0;
-  float k_i_phi_bottom_half_ = 0.0;
+  float k_p_phi_ = 0.0;
+  float k_d_phi_ = 0.0;
   rclcpp::TimerBase::SharedPtr control_timer_;
   // PID state (bottom hemisphere)
   float theta_error_int_ = 0.0f;   // integral of error
