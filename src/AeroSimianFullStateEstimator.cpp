@@ -103,7 +103,7 @@ private:
     constexpr double moteus_center = 0.88;  // bottom in moteus frame
 
     float phi     = static_cast<float>((r.position + (1-moteus_center ))*TWO_PI); // a* TWO_PI/ [rad]
-    float phi_dot = static_cast<float>(r.velocity * -TWO_PI);  // [rad/s]
+    float phi_dot = static_cast<float>(r.velocity * TWO_PI);  // [rad/s]
 
     aerosimian::msg::AeroSimianState out_msg;
     out_msg.header.stamp = this->now();
@@ -266,6 +266,7 @@ private:
 
     RCLCPP_INFO_STREAM(get_logger(), "phi_des: " << phi_des);
     RCLCPP_INFO_STREAM(get_logger(), "phi: " << phi);
+    RCLCPP_INFO_STREAM(get_logger(), "phi_dot: " << phi_dot);
     RCLCPP_INFO_STREAM(get_logger(), "phi_error: " << phi_error);
     RCLCPP_INFO_STREAM(get_logger(), "k_p_phi_: " << k_p_phi_);
     RCLCPP_INFO_STREAM(get_logger(), "phi_double_dot: " << phi_double_dot);
