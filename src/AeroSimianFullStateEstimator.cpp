@@ -100,9 +100,10 @@ private:
     const auto & r = maybe_result->values;
 
     constexpr double TWO_PI = 2.0 * M_PI;
-    RCLCPP_INFO_STREAM(get_logger(), "here 1");
-    float phi     = static_cast<float>((r.position- moteus_center_revs_) * TWO_PI);  // [rad]
-    float phi_dot = static_cast<float>(r.velocity * TWO_PI);  // [rad/s]
+    constexpr double moteus_center = 0.88;  // bottom in moteus frame
+
+    float phi     = static_cast<float>((r.position + (1-moteus_center ))*TWO_PI); // a* TWO_PI/ [rad]
+    float phi_dot = static_cast<float>(r.velocity * -TWO_PI);  // [rad/s]
 
     aerosimian::msg::AeroSimianState out_msg;
     out_msg.header.stamp = this->now();
@@ -223,30 +224,25 @@ private:
                                                  << "  acceleration_vec y: " << acceleration_vec(1));
     // gravity comp
     double grav_term = gravity * std::sin(theta);
-    acceleration_vec(1) += std::abs(grav_term);
+    acceleration_vec(0) -= std::abs(grav_term);
     RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
                                                  << "  acceleration_vec after grav y: " << acceleration_vec(1));
 
 
     // get desired phi angle
     // === Signed angle from current_state -> acceleration_vec ===
-    double dot   = current_state.dot(acceleration_vec);
-    double cross = current_state(0) * acceleration_vec(1)
-                 - current_state(1) * acceleration_vec(0);
+    // double dot   = current_state.dot(acceleration_vec);
+    // double cross = current_state(0) * acceleration_vec(1)
+    //              - current_state(1) * acceleration_vec(0);
 
-    double phi_des = std::atan2(cross, dot);  // in (-pi, pi]
+    constexpr double TWO_PI = 2.0 * M_PI;
+    // double phi_des = std::atan2(cross, dot);  // in (-pi,
+    double phi_des = std::atan2(acceleration_vec(1), acceleration_vec(0));  // in (-pi,
 
-    RCLCPP_INFO_STREAM(get_logger(), "phi_des_init: " << phi_des);
-
-    // If you need a fixed offset (e.g. +pi/2), do it here:
     if (phi_des < 0) {
-      phi_des += M_PI;
-    } else {
-      phi_des -= M_PI;
+            phi_des =TWO_PI - std::abs(phi_des);
     }
 
-
-    RCLCPP_INFO_STREAM(get_logger(), "phi_des_after_wrap: " << phi_des);
 
 
     // get thrust from linear gain on acceleration vector
@@ -297,9 +293,9 @@ private:
     RCLCPP_INFO_STREAM(get_logger(), "pwm_3: " << pwm_3);
     // convert to pwm
 
-    // if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
-    //   vertiq_->sendSet(pwm_0, pwm_1,pwm_2, pwm_3);
-    // }
+    if (vertiq_ && vertiq_->isOpen() && !vertiq_test_done_) {
+      vertiq_->sendSet(pwm_0, pwm_1,pwm_2, pwm_3);
+    }
 
     return;
 
@@ -330,7 +326,7 @@ private:
   mjbots::moteus::Controller controller_;
   aerosimian::msg::AeroSimianState last_state_;
   std::mutex state_mutex_;
-  float moteus_center_revs_ = .38;
+  float moteus_center_revs_ = .88;
 
   rclcpp::TimerBase::SharedPtr drive_test_timer_;
   bool test_drive_done_ = false;
