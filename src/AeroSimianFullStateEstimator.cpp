@@ -24,9 +24,12 @@ public:
     vertiq_baud_ = this->declare_parameter("vertiq_baud", 115200);
     k_p_theta_ = this->declare_parameter<double>("k_p_theta", 1.0);
     k_d_theta_ = this->declare_parameter<double>("k_d_theta", 1.0);
+
     k_p_phi_ = this->declare_parameter<double>("k_p_phi", 1.0);
     k_d_phi_ = this->declare_parameter<double>("k_d_phi", 1.0);
-    thrust_gain_ = this->declare_parameter<double>("thrust_gain", 0.5);
+    k_i_phi_ = this->declare_parameter<double>("k_i_phi", 1.0);
+
+    thrust_gain_ = this->declare_parameter<double>("thrust_gain", 1.0);
     I_term_ = this->declare_parameter<double>("I_term", 0.005);
 
     // Clear any existing faults.
@@ -224,7 +227,7 @@ private:
                                                  << "  acceleration_vec y: " << acceleration_vec(1));
     // gravity comp
     double grav_term = gravity * std::sin(theta);
-    acceleration_vec(0) -= std::abs(grav_term);
+    acceleration_vec(0) += std::abs(grav_term);
     RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
                                                  << "  acceleration_vec after grav y: " << acceleration_vec(1));
 
@@ -257,7 +260,16 @@ private:
 
     // phi controller now
     double phi_error = phi_des - phi;
-    double phi_double_dot = k_p_phi_ * phi_error - k_d_phi_ * phi_dot;
+
+    phi_error_int_ += phi_error * dt;
+    if (phi_error_int_ > 1.0) {
+      phi_error_int_ = 1.0;
+    }else if (phi_error_int_ < -1.0) {
+      phi_error_int_ = -1.0;
+    }
+
+    double phi_double_dot = k_p_phi_ * phi_error - k_d_phi_ * phi_dot + k_i_phi_ * phi_error_int_;
+
     double torque_des = I_term_ * phi_double_dot;
 
     const double rotor_arm_length = 0.094; // m
@@ -266,9 +278,16 @@ private:
 
     RCLCPP_INFO_STREAM(get_logger(), "phi_des: " << phi_des);
     RCLCPP_INFO_STREAM(get_logger(), "phi: " << phi);
-    RCLCPP_INFO_STREAM(get_logger(), "phi_dot: " << phi_dot);
+
     RCLCPP_INFO_STREAM(get_logger(), "phi_error: " << phi_error);
     RCLCPP_INFO_STREAM(get_logger(), "k_p_phi_: " << k_p_phi_);
+
+    RCLCPP_INFO_STREAM(get_logger(), "phi_dot: " << phi_dot);
+    RCLCPP_INFO_STREAM(get_logger(), "k_d_phi_: " << k_d_phi_);
+
+    RCLCPP_INFO_STREAM(get_logger(), "phi_error_int_: " << phi_error_int_);
+    RCLCPP_INFO_STREAM(get_logger(), "k_i_phi_: " << k_i_phi_);
+
     RCLCPP_INFO_STREAM(get_logger(), "phi_double_dot: " << phi_double_dot);
 
     RCLCPP_INFO_STREAM(get_logger(), "torque_des: " << torque_des);
@@ -304,10 +323,11 @@ private:
 
   double thrustToDuty(double x) {
     // Clamp input for safety
-    if (x < 0.0) x = 0.0;
-    if (x > 0.8) x = 0.8;
 
-    return 0.431 + 0.0964 * x - 6.79e-03 * x * x;
+    double val =  0.431 + 0.0964 * x - 6.79e-03 * x * x;
+    if (val < 0.0) val = 0.0;
+    if (val > 0.8) val = 0.8;
+    return val;
   }
 
   // ROS bits
@@ -339,6 +359,8 @@ private:
   float theta_des_ = -M_PI/2;
   float k_p_phi_ = 1.0;
   float k_d_phi_ = 1.0;
+  float k_i_phi_ = 1.0;
+  float phi_error_int_ = 0.0;
   rclcpp::TimerBase::SharedPtr control_timer_;
   float theta_error_int_ = 0.0f;   // integral of error
   float prev_theta_error_ = 0.0f;  // previous error
@@ -346,6 +368,8 @@ private:
 
   float thrust_gain_ = 1.0;
   float I_term_ = 0.005;
+
+
 };
 
 int main(int argc, char ** argv) {
