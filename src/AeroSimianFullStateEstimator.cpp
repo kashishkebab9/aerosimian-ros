@@ -227,7 +227,11 @@ private:
                                                  << "  acceleration_vec y: " << acceleration_vec(1));
     // gravity comp
     double grav_term = gravity * std::sin(theta);
-    acceleration_vec(0) += std::abs(grav_term);
+    if (std::abs(theta) > .5) {
+            acceleration_vec(0) -= std::abs(grav_term);
+    }else {
+            acceleration_vec(0) += std::abs(grav_term)/10; // at zero, 45 degrees is not enough to hit the spot
+    }
     RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
                                                  << "  acceleration_vec after grav y: " << acceleration_vec(1));
 
