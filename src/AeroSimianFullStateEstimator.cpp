@@ -250,7 +250,7 @@ private:
 
 
     // guardrails on phi_des
-    if phi > 0 {
+    if phi_des > 0 {
       if (phi_des > 1.5*M_PI) {
         phi_des =1.5*M_PI;
       } else if (phi_des < M_PI/2) {
