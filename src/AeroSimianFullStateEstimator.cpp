@@ -227,11 +227,12 @@ private:
                                                  << "  acceleration_vec y: " << acceleration_vec(1));
     // gravity comp
     double grav_term = gravity * std::sin(theta);
-    if (std::abs(theta) > .5) {
-            acceleration_vec(0) -= std::abs(grav_term);
-    }else {
-            acceleration_vec(0) += std::abs(grav_term)/10; // at zero, 45 degrees is not enough to hit the spot
-    }
+    acceleration_vec(0) -= std::abs(grav_term);
+    // if (std::abs(theta) > .5) {
+    //         acceleration_vec(0) -= std::abs(grav_term);
+    // }else {
+    //         acceleration_vec(0) += std::abs(grav_term)/10; // at zero, 45 degrees is not enough to hit the spot
+    // }
     RCLCPP_INFO_STREAM(get_logger(), "acceleration_vec after grav x: " << acceleration_vec(0)
                                                  << "  acceleration_vec after grav y: " << acceleration_vec(1));
 
@@ -244,10 +245,23 @@ private:
 
     constexpr double TWO_PI = 2.0 * M_PI;
     // double phi_des = std::atan2(cross, dot);  // in (-pi,
-    double phi_des = std::atan2(acceleration_vec(1), acceleration_vec(0));  // in (-pi,
+    // double phi_des = std::atan2(acceleration_vec(1), acceleration_vec(0));  // in (-pi,
+    double phi_des = theta_des_;
 
-    if (phi_des < 0) {
-            phi_des =TWO_PI - std::abs(phi_des);
+
+    // guardrails on phi_des
+    if phi > 0 {
+      if (phi_des > 1.5*M_PI) {
+        phi_des =1.5*M_PI;
+      } else if (phi_des < M_PI/2) {
+        phi_des = M_PI/2;
+      }
+    } else {
+      if (phi_des > -M_PI/2) {
+        phi_des = -M_PI/2;
+      } else if (phi_des < -1.5*M_PI) {
+        phi_des = -1.5*M_PI;
+      }
     }
 
 
