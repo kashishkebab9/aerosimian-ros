@@ -248,21 +248,18 @@ private:
     // double phi_des = std::atan2(acceleration_vec(1), acceleration_vec(0));  // in (-pi,
     double phi_des = theta_des_;
 
+    if (phi_des < 0) {
+        phi_des += TWO_PI;
+    }
+
 
     // guardrails on phi_des
-    if (phi_des > 0) {
-      if (phi_des > 1.5*M_PI) {
-        phi_des =1.5*M_PI;
-      } else if (phi_des < M_PI/2) {
-        phi_des = M_PI/2;
-      }
-    } else {
-      if (phi_des > -M_PI/2) {
-        phi_des = -M_PI/2;
-      } else if (phi_des < -1.5*M_PI) {
-        phi_des = -1.5*M_PI;
-      }
+    if (phi_des > 1.5*M_PI) {
+      phi_des =1.5*M_PI;
+    } else if (phi_des < M_PI/2) {
+      phi_des = M_PI/2;
     }
+
 
 
 
